@@ -1,0 +1,29 @@
+[Unit]
+Description=claude-ssh-proxy - SSH reverse proxy for AI agents
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=claude-ssh-proxy
+Group=claude-ssh-proxy
+WorkingDirectory=/var/lib/claude-ssh-proxy
+ExecStart=/usr/local/bin/claude-ssh-proxy \
+  -db /var/lib/claude-ssh-proxy/claude-ssh-proxy.db \
+  -host-key /var/lib/claude-ssh-proxy/host_key \
+  -web-addr 127.0.0.1:8080
+
+Restart=on-failure
+RestartSec=2s
+
+# 只放开必要的权限:监听端口(非特权端口不需要 CAP_NET_BIND_SERVICE,这里保留以支持绑定 <1024 的口)、
+# 读写自己的数据目录,其余尽量收紧。
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/claude-ssh-proxy
+PrivateTmp=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

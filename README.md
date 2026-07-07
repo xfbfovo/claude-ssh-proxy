@@ -110,6 +110,25 @@ Agent 之后执行的每条命令、每个交互式 shell 会话,都会被记录
 
 SSH 监听地址不是启动参数,而是存在数据库里的一项设置,首次启动默认 `:2222`,之后可以在 Web 后台"监听设置"页面修改,修改后立即热切换,不需要重启进程。
 
+## 用 systemd 常驻运行
+
+仓库里 `systemd/claude-ssh-proxy.service` 是一份现成的 unit 文件,默认把数据库和 host key 放在 `/var/lib/claude-ssh-proxy`,Web 后台只监听 `127.0.0.1:8080`(建议在前面套一层反向代理做 TLS 再对外暴露)。安装步骤:
+
+```bash
+sudo useradd --system --home /var/lib/claude-ssh-proxy --shell /usr/sbin/nologin claude-ssh-proxy
+sudo mkdir -p /var/lib/claude-ssh-proxy
+sudo chown claude-ssh-proxy:claude-ssh-proxy /var/lib/claude-ssh-proxy
+
+sudo cp claude-ssh-proxy /usr/local/bin/claude-ssh-proxy
+sudo cp systemd/claude-ssh-proxy.service /etc/systemd/system/
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now claude-ssh-proxy
+sudo journalctl -u claude-ssh-proxy -f   # 看启动日志里打印的初始管理员密码
+```
+
+SSH 监听端口(默认 `:2222`)本身不需要特权,如果你把它改成 1024 以下的端口,unit 文件里已经带了 `CAP_NET_BIND_SERVICE`,不需要用 root 跑。
+
 ## 目录结构
 
 ```
