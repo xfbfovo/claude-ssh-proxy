@@ -7,10 +7,18 @@ const emptyKey: Omit<ClientKey, "id"> = {
   route_users: [],
 };
 
+// extractLabelFromPublicKey 取公钥内容里最后一段(comment,比如 "root@vultr")作为默认名称建议。
+// authorized_keys 格式是 "类型 base64内容 [comment]",comment 是可选的。
+function extractLabelFromPublicKey(publicKey: string): string {
+  const parts = publicKey.trim().split(/\s+/);
+  return parts.length >= 3 ? parts[parts.length - 1] : "";
+}
+
 export function ClientKeysPage() {
   const [keys, setKeys] = useState<ClientKey[]>([]);
   const [routes, setRoutes] = useState<RouteRecord[]>([]);
   const [editing, setEditing] = useState<(Omit<ClientKey, "id"> & { id?: number }) | null>(null);
+  const [labelAuto, setLabelAuto] = useState(true);
   const [error, setError] = useState("");
 
   async function load() {
@@ -25,12 +33,26 @@ export function ClientKeysPage() {
 
   function startCreate() {
     setEditing({ ...emptyKey });
+    setLabelAuto(true);
     setError("");
   }
 
   function startEdit(k: ClientKey) {
     setEditing({ ...k });
+    setLabelAuto(k.label === extractLabelFromPublicKey(k.public_key));
     setError("");
+  }
+
+  function onPublicKeyChange(value: string) {
+    if (!editing) return;
+    const derived = labelAuto ? extractLabelFromPublicKey(value) : editing.label;
+    setEditing({ ...editing, public_key: value, label: derived });
+  }
+
+  function onLabelChange(value: string) {
+    if (!editing) return;
+    setLabelAuto(false);
+    setEditing({ ...editing, label: value });
   }
 
   function toggleRoute(routeUser: string) {
@@ -141,24 +163,24 @@ export function ClientKeysPage() {
             </h3>
 
             <div className="mb-3">
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
-                名称(比如 claude-agent-1)
-              </label>
-              <input
-                className="input"
-                value={editing.label}
-                onChange={(e) => setEditing({ ...editing, label: e.target.value })}
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">公钥内容</label>
+              <textarea
+                className="input h-20 font-mono"
+                value={editing.public_key}
+                onChange={(e) => onPublicKeyChange(e.target.value)}
+                placeholder="ssh-ed25519 AAAA... claude-client"
                 autoFocus
               />
             </div>
 
             <div className="mb-3">
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">公钥内容</label>
-              <textarea
-                className="input h-20 font-mono"
-                value={editing.public_key}
-                onChange={(e) => setEditing({ ...editing, public_key: e.target.value })}
-                placeholder="ssh-ed25519 AAAA... claude-client"
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+                名称(默认从公钥末尾的 comment 自动截取,可以手动改)
+              </label>
+              <input
+                className="input"
+                value={editing.label}
+                onChange={(e) => onLabelChange(e.target.value)}
               />
             </div>
 
