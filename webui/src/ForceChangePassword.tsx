@@ -2,7 +2,6 @@ import { useState } from "react";
 import { api, ApiError } from "./api";
 
 export function ForceChangePassword({ onDone }: { onDone: () => void }) {
-  const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +20,7 @@ export function ForceChangePassword({ onDone }: { onDone: () => void }) {
     }
     setLoading(true);
     try {
-      await api.changePassword(oldPassword, newPassword);
+      await api.changePassword("", newPassword);
       onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "修改失败");
@@ -41,20 +40,13 @@ export function ForceChangePassword({ onDone }: { onDone: () => void }) {
           当前账号还在使用初始密码,必须先修改密码才能继续使用管理后台。
         </p>
 
-        <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">原密码(初始密码)</label>
-        <input
-          type="password"
-          className="mb-4 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          value={oldPassword}
-          onChange={(e) => setOldPassword(e.target.value)}
-          autoFocus
-        />
         <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">新密码(至少 8 位)</label>
         <input
           type="password"
           className="mb-4 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
+          autoFocus
         />
         <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">确认新密码</label>
         <input

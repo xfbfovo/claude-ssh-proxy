@@ -160,7 +160,9 @@ func (a *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "用户不存在")
 		return
 	}
-	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.OldPassword)) != nil {
+	// 还没完成首次登录强制改密码的账号,已经用当前密码登录成功过一次(拿到了 session),
+	// 不需要再验证一遍原密码;已初始化过的账号正常修改密码,还是要校验原密码。
+	if user.Initialized && bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.OldPassword)) != nil {
 		writeError(w, http.StatusUnauthorized, "原密码错误")
 		return
 	}
