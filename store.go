@@ -207,7 +207,7 @@ func (s *Store) ListRoutes() ([]RouteRecord, error) {
 	}
 	defer rows.Close()
 
-	var out []RouteRecord
+	out := []RouteRecord{}
 	for rows.Next() {
 		var r RouteRecord
 		var pw, pk, pp, lph sql.NullString
@@ -257,7 +257,7 @@ func (s *Store) listAuthorizedKeys(routeUser string) ([]string, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var keys []string
+	keys := []string{}
 	for rows.Next() {
 		var k string
 		if err := rows.Scan(&k); err != nil {
@@ -381,7 +381,7 @@ func (s *Store) ListAuditLogs(limit int, routeUser string) ([]AuditLog, error) {
 	}
 	defer rows.Close()
 
-	var out []AuditLog
+	out := []AuditLog{}
 	for rows.Next() {
 		var a AuditLog
 		var exitStatus sql.NullInt64

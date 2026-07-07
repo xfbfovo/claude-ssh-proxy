@@ -7,7 +7,7 @@ export function AuditPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   async function load() {
-    setLogs(await api.listAudit(200, routeUser));
+    setLogs((await api.listAudit(200, routeUser)) ?? []);
   }
 
   useEffect(() => {

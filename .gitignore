@@ -1,3 +1,4 @@
+/claude-ssh-proxy
 /ssh-proxy
 *.db
 *.db-wal

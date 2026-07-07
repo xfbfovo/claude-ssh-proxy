@@ -24,7 +24,7 @@ export function RoutesPage() {
   const [isNew, setIsNew] = useState(false);
 
   async function load() {
-    setRoutes(await api.listRoutes());
+    setRoutes((await api.listRoutes()) ?? []);
   }
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export function RoutesPage() {
       listen_password: "",
       clear_listen_password: false,
     });
-    setAuthorizedKeysText(r.authorized_keys.join("\n"));
+    setAuthorizedKeysText((r.authorized_keys ?? []).join("\n"));
     setIsNew(false);
     setError("");
   }
@@ -107,7 +107,7 @@ export function RoutesPage() {
                 </td>
                 <td className="px-4 py-2 font-mono">{r.target_user}</td>
                 <td className="px-4 py-2">{r.auth_type === "password" ? "密码" : "私钥"}</td>
-                <td className="px-4 py-2">{r.authorized_keys.length}</td>
+                <td className="px-4 py-2">{(r.authorized_keys ?? []).length}</td>
                 <td className="px-4 py-2">
                   {r.has_listen_password ? (
                     <span className="text-emerald-600 dark:text-emerald-400">已启用</span>
