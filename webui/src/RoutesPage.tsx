@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type RouteRecord } from "./api";
+import { api, ApiError, type RouteRecord, type ServerCredential } from "./api";
 import { ChipList } from "./ChipList";
 import { Tooltip } from "./Tooltip";
 
@@ -22,14 +22,18 @@ const emptyRoute: RouteRecord = {
 
 export function RoutesPage() {
   const [routes, setRoutes] = useState<RouteRecord[]>([]);
+  const [credentials, setCredentials] = useState<ServerCredential[]>([]);
   const [editing, setEditing] = useState<RouteRecord | null>(null);
+  const [useSharedCredential, setUseSharedCredential] = useState(false);
   const [error, setError] = useState("");
   const [isNew, setIsNew] = useState(false);
   const [testingRoute, setTestingRoute] = useState<string | null>(null);
   const [testingAll, setTestingAll] = useState(false);
 
   async function load() {
-    setRoutes((await api.listRoutes()) ?? []);
+    const [r, c] = await Promise.all([api.listRoutes(), api.listServerCredentials()]);
+    setRoutes(r ?? []);
+    setCredentials(c ?? []);
   }
 
   useEffect(() => {
@@ -62,6 +66,7 @@ export function RoutesPage() {
 
   function startCreate() {
     setEditing({ ...emptyRoute });
+    setUseSharedCredential(false);
     setIsNew(true);
     setError("");
   }
@@ -75,6 +80,7 @@ export function RoutesPage() {
       listen_password: "",
       clear_listen_password: false,
     });
+    setUseSharedCredential(r.server_credential_id != null);
     setIsNew(false);
     setError("");
   }
@@ -83,7 +89,10 @@ export function RoutesPage() {
     if (!editing) return;
     setError("");
     try {
-      await api.upsertRoute(editing);
+      await api.upsertRoute({
+        ...editing,
+        server_credential_id: useSharedCredential ? editing.server_credential_id : null,
+      });
       setEditing(null);
       await load();
     } catch (err) {
@@ -147,7 +156,17 @@ export function RoutesPage() {
                 <td className="px-4 py-2">
                   <TestStatus route={r} />
                 </td>
-                <td className="px-4 py-2">{r.auth_type === "password" ? "密码" : "私钥"}</td>
+                <td className="px-4 py-2">
+                  {r.server_credential_id != null ? (
+                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-xs text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      凭据: {r.server_credential_label}
+                    </span>
+                  ) : r.auth_type === "password" ? (
+                    "密码"
+                  ) : (
+                    "私钥"
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   {r.has_listen_password ? (
                     <span className="text-emerald-600 dark:text-emerald-400">已启用</span>
@@ -227,42 +246,92 @@ export function RoutesPage() {
             </div>
 
             <Field label="连接目标机器的认证方式">
-              <select
-                className="input"
-                value={editing.auth_type}
-                onChange={(e) => setEditing({ ...editing, auth_type: e.target.value as "password" | "private_key" })}
-              >
-                <option value="password">密码</option>
-                <option value="private_key">私钥</option>
-              </select>
+              <div className="mb-2 flex gap-4 text-sm text-slate-700 dark:text-slate-300">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    checked={!useSharedCredential}
+                    onChange={() => setUseSharedCredential(false)}
+                  />
+                  单独指定
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    checked={useSharedCredential}
+                    onChange={() => setUseSharedCredential(true)}
+                  />
+                  使用服务器凭据
+                </label>
+              </div>
             </Field>
 
-            {editing.auth_type === "password" ? (
-              <Field label="密码 (留空则不修改)">
-                <input
-                  type="password"
-                  className="input"
-                  value={editing.auth_password}
-                  onChange={(e) => setEditing({ ...editing, auth_password: e.target.value })}
-                />
+            {useSharedCredential ? (
+              <Field label="选择服务器凭据">
+                {credentials.length === 0 ? (
+                  <p className="text-sm text-slate-400">
+                    还没有配置任何服务器凭据,先去"服务器凭据"页面添加
+                  </p>
+                ) : (
+                  <select
+                    className="input"
+                    value={editing.server_credential_id ?? ""}
+                    onChange={(e) => setEditing({ ...editing, server_credential_id: Number(e.target.value) })}
+                  >
+                    <option value="" disabled>
+                      请选择
+                    </option>
+                    {credentials.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </Field>
             ) : (
               <>
-                <Field label="私钥内容 (PEM,留空则不修改)">
-                  <textarea
-                    className="input h-24 font-mono"
-                    value={editing.auth_private_key}
-                    onChange={(e) => setEditing({ ...editing, auth_private_key: e.target.value })}
-                  />
-                </Field>
-                <Field label="私钥密码 (如果有)">
-                  <input
-                    type="password"
+                <Field label="认证方式">
+                  <select
                     className="input"
-                    value={editing.auth_private_key_passphrase}
-                    onChange={(e) => setEditing({ ...editing, auth_private_key_passphrase: e.target.value })}
-                  />
+                    value={editing.auth_type}
+                    onChange={(e) =>
+                      setEditing({ ...editing, auth_type: e.target.value as "password" | "private_key" })
+                    }
+                  >
+                    <option value="password">密码</option>
+                    <option value="private_key">私钥</option>
+                  </select>
                 </Field>
+
+                {editing.auth_type === "password" ? (
+                  <Field label="密码 (留空则不修改)">
+                    <input
+                      type="password"
+                      className="input"
+                      value={editing.auth_password}
+                      onChange={(e) => setEditing({ ...editing, auth_password: e.target.value })}
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <Field label="私钥内容 (PEM,留空则不修改)">
+                      <textarea
+                        className="input h-24 font-mono"
+                        value={editing.auth_private_key}
+                        onChange={(e) => setEditing({ ...editing, auth_private_key: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="私钥密码 (如果有)">
+                      <input
+                        type="password"
+                        className="input"
+                        value={editing.auth_private_key_passphrase}
+                        onChange={(e) => setEditing({ ...editing, auth_private_key_passphrase: e.target.value })}
+                      />
+                    </Field>
+                  </>
+                )}
               </>
             )}
 

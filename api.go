@@ -44,6 +44,11 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/routes/test-all", a.auth(a.handleTestAllRoutes))
 	mux.HandleFunc("POST /api/routes/{user}/test", a.auth(a.handleTestRoute))
 
+	mux.HandleFunc("GET /api/server-credentials", a.auth(a.handleListServerCredentials))
+	mux.HandleFunc("POST /api/server-credentials", a.auth(a.handleCreateServerCredential))
+	mux.HandleFunc("PUT /api/server-credentials/{id}", a.auth(a.handleUpdateServerCredential))
+	mux.HandleFunc("DELETE /api/server-credentials/{id}", a.auth(a.handleDeleteServerCredential))
+
 	mux.HandleFunc("GET /api/client-keys", a.auth(a.handleListClientKeys))
 	mux.HandleFunc("POST /api/client-keys", a.auth(a.handleCreateClientKey))
 	mux.HandleFunc("PUT /api/client-keys/{id}", a.auth(a.handleUpdateClientKey))
@@ -203,23 +208,32 @@ func (a *API) handleUpsertRoute(w http.ResponseWriter, r *http.Request) {
 	if route.TargetPort == 0 {
 		route.TargetPort = 22
 	}
-	switch route.AuthType {
-	case "password":
-		if route.AuthPassword == "" {
-			if existing, err := a.store.GetRoute(route.RouteUser); err == nil {
-				route.AuthPassword = existing.AuthPassword // 前端没传密码(说明没改),沿用旧值
-			}
+
+	if route.ServerCredentialID != nil {
+		// 用共享的"服务器凭据",这条路由自己不用填密码/私钥,只要凭据存在就行。
+		if _, err := a.store.GetServerCredential(*route.ServerCredentialID); err != nil {
+			writeError(w, http.StatusBadRequest, "指定的服务器凭据不存在")
+			return
 		}
-	case "private_key":
-		if route.AuthPrivateKey == "" {
-			if existing, err := a.store.GetRoute(route.RouteUser); err == nil {
-				route.AuthPrivateKey = existing.AuthPrivateKey
-				route.AuthPrivateKeyPassphrase = existing.AuthPrivateKeyPassphrase
+	} else {
+		switch route.AuthType {
+		case "password":
+			if route.AuthPassword == "" {
+				if existing, err := a.store.GetRoute(route.RouteUser); err == nil {
+					route.AuthPassword = existing.AuthPassword // 前端没传密码(说明没改),沿用旧值
+				}
 			}
+		case "private_key":
+			if route.AuthPrivateKey == "" {
+				if existing, err := a.store.GetRoute(route.RouteUser); err == nil {
+					route.AuthPrivateKey = existing.AuthPrivateKey
+					route.AuthPrivateKeyPassphrase = existing.AuthPrivateKeyPassphrase
+				}
+			}
+		default:
+			writeError(w, http.StatusBadRequest, "auth_type 必须是 password 或 private_key")
+			return
 		}
-	default:
-		writeError(w, http.StatusBadRequest, "auth_type 必须是 password 或 private_key")
-		return
 	}
 
 	if err := a.store.UpsertRoute(route); err != nil {
@@ -297,6 +311,101 @@ func (a *API) handleTestAllRoutes(w http.ResponseWriter, r *http.Request) {
 		updated[i].AuthPassword, updated[i].AuthPrivateKey, updated[i].AuthPrivateKeyPassphrase = "", "", ""
 	}
 	writeJSON(w, updated)
+}
+
+func (a *API) handleListServerCredentials(w http.ResponseWriter, r *http.Request) {
+	creds, err := a.store.ListServerCredentials()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i := range creds {
+		creds[i].AuthPassword = ""
+		creds[i].AuthPrivateKey = ""
+		creds[i].AuthPrivateKeyPassphrase = ""
+	}
+	writeJSON(w, creds)
+}
+
+func validateServerCredentialAuth(c *ServerCredential, existing *ServerCredential) error {
+	switch c.AuthType {
+	case "password":
+		if c.AuthPassword == "" && existing != nil {
+			c.AuthPassword = existing.AuthPassword
+		}
+	case "private_key":
+		if c.AuthPrivateKey == "" && existing != nil {
+			c.AuthPrivateKey = existing.AuthPrivateKey
+			c.AuthPrivateKeyPassphrase = existing.AuthPrivateKeyPassphrase
+		}
+	default:
+		return fmt.Errorf("auth_type 必须是 password 或 private_key")
+	}
+	return nil
+}
+
+func (a *API) handleCreateServerCredential(w http.ResponseWriter, r *http.Request) {
+	var body ServerCredential
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Label == "" {
+		writeError(w, http.StatusBadRequest, "label 不能为空")
+		return
+	}
+	if err := validateServerCredentialAuth(&body, nil); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	id, err := a.store.CreateServerCredential(body)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "id": id})
+}
+
+func (a *API) handleUpdateServerCredential(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "非法的 id")
+		return
+	}
+	var body ServerCredential
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Label == "" {
+		writeError(w, http.StatusBadRequest, "label 不能为空")
+		return
+	}
+	existing, err := a.store.GetServerCredential(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "服务器凭据不存在")
+		return
+	}
+	if err := validateServerCredentialAuth(&body, existing); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := a.store.UpdateServerCredential(id, body); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (a *API) handleDeleteServerCredential(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "非法的 id")
+		return
+	}
+	if err := a.store.DeleteServerCredential(id); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 func (a *API) handleListClientKeys(w http.ResponseWriter, r *http.Request) {

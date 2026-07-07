@@ -19,12 +19,27 @@ export interface RouteRecord {
   last_test_at: string | null;
   last_test_ok: boolean | null;
   last_test_error?: string;
+
+  // 设置了共享的"服务器凭据"时,这条路由自己的 auth_type/auth_password/auth_private_key
+  // 会被忽略,认证信息以凭据为准;server_credential_label 是只读展示字段。
+  server_credential_id?: number | null;
+  server_credential_label?: string;
 }
 
 export interface ClientKey {
   id: number;
   label: string;
   public_key: string;
+  route_users: string[];
+}
+
+export interface ServerCredential {
+  id: number;
+  label: string;
+  auth_type: AuthType;
+  auth_password?: string;
+  auth_private_key?: string;
+  auth_private_key_passphrase?: string;
   route_users: string[];
 }
 
@@ -102,6 +117,20 @@ export const api = {
   testRoute: (routeUser: string) =>
     request<RouteRecord>(`/api/routes/${encodeURIComponent(routeUser)}/test`, { method: "POST" }),
   testAllRoutes: () => request<RouteRecord[]>("/api/routes/test-all", { method: "POST" }),
+
+  listServerCredentials: () => request<ServerCredential[]>("/api/server-credentials"),
+  createServerCredential: (cred: Omit<ServerCredential, "id" | "route_users">) =>
+    request<{ ok: boolean; id: number }>("/api/server-credentials", {
+      method: "POST",
+      body: JSON.stringify(cred),
+    }),
+  updateServerCredential: (id: number, cred: Omit<ServerCredential, "id" | "route_users">) =>
+    request<{ ok: boolean }>(`/api/server-credentials/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(cred),
+    }),
+  deleteServerCredential: (id: number) =>
+    request<{ ok: boolean }>(`/api/server-credentials/${id}`, { method: "DELETE" }),
 
   listClientKeys: () => request<ClientKey[]>("/api/client-keys"),
   createClientKey: (key: Omit<ClientKey, "id">) =>

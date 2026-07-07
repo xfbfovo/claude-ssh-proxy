@@ -4,12 +4,14 @@ import { api, type MeResponse } from "./api";
 import { Login } from "./Login";
 import { ForceChangePassword } from "./ForceChangePassword";
 import { RoutesPage } from "./RoutesPage";
+import { ServerCredentialsPage } from "./ServerCredentialsPage";
 import { ClientKeysPage } from "./ClientKeysPage";
 import { SettingsPage } from "./SettingsPage";
 import { AuditPage } from "./AuditPage";
 
 const NAV_ITEMS = [
   { path: "/routes", label: "服务器" },
+  { path: "/server-credentials", label: "服务器凭据" },
   { path: "/client-keys", label: "客户端密钥" },
   { path: "/settings", label: "监听设置" },
   { path: "/audit", label: "审计日志" },
@@ -77,6 +79,7 @@ function App() {
         <main className="mx-auto max-w-7xl px-6 py-8">
           <Routes>
             <Route path="/routes" element={<RoutesPage />} />
+            <Route path="/server-credentials" element={<ServerCredentialsPage />} />
             <Route path="/client-keys" element={<ClientKeysPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/audit" element={<AuditPage />} />
