@@ -5,9 +5,19 @@ export function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [routeUser, setRouteUser] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function load() {
     setLogs((await api.listAudit(200, routeUser)) ?? []);
+  }
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   useEffect(() => {
@@ -21,12 +31,21 @@ export function AuditPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">审计日志</h2>
-        <input
-          className="input max-w-xs"
-          placeholder="按登录别名过滤"
-          value={routeUser}
-          onChange={(e) => setRouteUser(e.target.value)}
-        />
+        <div className="flex gap-2">
+          <input
+            className="input max-w-xs"
+            placeholder="按登录别名过滤"
+            value={routeUser}
+            onChange={(e) => setRouteUser(e.target.value)}
+          />
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {refreshing ? "刷新中..." : "刷新"}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
