@@ -9,11 +9,19 @@ export interface RouteRecord {
   auth_password?: string;
   auth_private_key?: string;
   auth_private_key_passphrase?: string;
-  authorized_keys: string[];
+
+  client_key_labels: string[];
 
   listen_password?: string;
   clear_listen_password?: boolean;
   has_listen_password: boolean;
+}
+
+export interface ClientKey {
+  id: number;
+  label: string;
+  public_key: string;
+  route_users: string[];
 }
 
 export interface AuditLog {
@@ -27,6 +35,7 @@ export interface AuditLog {
   detail: string;
   exit_status: number | null;
   truncated: boolean;
+  client_key_label: string;
 }
 
 class ApiError extends Error {
@@ -57,14 +66,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface MeResponse {
+  username: string;
+  initialized: boolean;
+}
+
 export const api = {
   login: (username: string, password: string) =>
-    request<{ username: string }>("/api/login", {
+    request<MeResponse>("/api/login", {
       method: "POST",
       body: JSON.stringify({ Username: username, Password: password }),
     }),
   logout: () => request<{ ok: boolean }>("/api/logout", { method: "POST" }),
-  me: () => request<{ username: string }>("/api/me"),
+  me: () => request<MeResponse>("/api/me"),
   changePassword: (oldPassword: string, newPassword: string) =>
     request<{ ok: boolean }>("/api/admin/password", {
       method: "PUT",
@@ -81,6 +95,20 @@ export const api = {
     request<{ ok: boolean }>(`/api/routes/${encodeURIComponent(routeUser)}`, {
       method: "DELETE",
     }),
+
+  listClientKeys: () => request<ClientKey[]>("/api/client-keys"),
+  createClientKey: (key: Omit<ClientKey, "id">) =>
+    request<{ ok: boolean; id: number }>("/api/client-keys", {
+      method: "POST",
+      body: JSON.stringify(key),
+    }),
+  updateClientKey: (id: number, key: Omit<ClientKey, "id">) =>
+    request<{ ok: boolean }>(`/api/client-keys/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(key),
+    }),
+  deleteClientKey: (id: number) =>
+    request<{ ok: boolean }>(`/api/client-keys/${id}`, { method: "DELETE" }),
 
   getSettings: () => request<{ listen_addr: string }>("/api/settings"),
   updateSettings: (listenAddr: string) =>

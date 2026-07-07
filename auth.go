@@ -9,22 +9,22 @@ import (
 )
 
 // buildPublicKeyCallback 每次认证尝试都查库:根据登录用户名找到路由,
-// 校验客户端公钥是否在该路由配置的 authorized_keys 里。
+// 再看关联到这条路由的客户端密钥(client_keys,多对多关系)里有没有匹配的公钥。
 func buildPublicKeyCallback(store *Store) func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 	return func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 		user := conn.User()
-		route, err := store.GetRoute(user)
+		clientKeys, err := store.ListClientKeysForRoute(user)
 		if err != nil {
 			return nil, fmt.Errorf("未知用户名 %q", user)
 		}
-		for _, line := range route.AuthorizedKeys {
-			allowed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
+		for _, ck := range clientKeys {
+			allowed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(ck.PublicKey))
 			if err != nil {
 				continue
 			}
 			if bytes.Equal(allowed.Marshal(), key.Marshal()) {
 				return &ssh.Permissions{
-					Extensions: map[string]string{"route-user": user},
+					Extensions: map[string]string{"route-user": user, "client-key-label": ck.Label},
 				}, nil
 			}
 		}
@@ -45,7 +45,7 @@ func buildPasswordCallback(store *Store) func(conn ssh.ConnMetadata, password []
 			return nil, fmt.Errorf("密码错误")
 		}
 		return &ssh.Permissions{
-			Extensions: map[string]string{"route-user": user},
+			Extensions: map[string]string{"route-user": user, "client-key-label": "(密码登录)"},
 		}, nil
 	}
 }

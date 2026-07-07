@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { api, ApiError } from "./api";
+import { api, ApiError, type MeResponse } from "./api";
 
-export function Login({ onLoggedIn }: { onLoggedIn: (username: string) => void }) {
+export function Login({ onLoggedIn }: { onLoggedIn: (me: MeResponse) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -13,7 +13,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: (username: string) => void }
     setLoading(true);
     try {
       const res = await api.login(username, password);
-      onLoggedIn(res.username);
+      onLoggedIn(res);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "登录失败");
     } finally {
@@ -28,7 +28,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: (username: string) => void }
         className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950"
       >
         <h1 className="mb-6 text-xl font-semibold text-slate-900 dark:text-slate-100">
-          ssh-proxy 管理后台
+          claude-ssh-proxy 管理后台
         </h1>
         <label className="mb-1 block text-sm text-slate-600 dark:text-slate-400">用户名</label>
         <input

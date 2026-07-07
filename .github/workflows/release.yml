@@ -11,9 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -34,42 +31,17 @@ jobs:
       - name: Build binary
         env:
           GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
+          GOARCH: amd64
           CGO_ENABLED: 0
         run: |
           mkdir -p dist
-          out="claude-ssh-proxy-linux-${{ matrix.goarch }}"
+          out="claude-ssh-proxy-linux-amd64"
           go build -trimpath -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o "dist/${out}" .
-
-      - name: Package
-        working-directory: dist
-        run: |
-          for f in *; do
-            tar czf "${f}.tar.gz" "$f"
-            rm "$f"
-          done
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: binaries-linux-${{ matrix.goarch }}
-          path: dist/*
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Flatten artifacts
-        run: |
-          mkdir -p release
-          find artifacts -type f -name '*.tar.gz' -exec cp {} release/ \;
-          ls -la release
+          tar czf "dist/${out}.tar.gz" -C dist "${out}"
+          rm "dist/${out}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*
+          files: dist/*.tar.gz
           generate_release_notes: true

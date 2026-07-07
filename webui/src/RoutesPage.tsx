@@ -10,7 +10,7 @@ const emptyRoute: RouteRecord = {
   auth_password: "",
   auth_private_key: "",
   auth_private_key_passphrase: "",
-  authorized_keys: [],
+  client_key_labels: [],
   listen_password: "",
   clear_listen_password: false,
   has_listen_password: false,
@@ -19,7 +19,6 @@ const emptyRoute: RouteRecord = {
 export function RoutesPage() {
   const [routes, setRoutes] = useState<RouteRecord[]>([]);
   const [editing, setEditing] = useState<RouteRecord | null>(null);
-  const [authorizedKeysText, setAuthorizedKeysText] = useState("");
   const [error, setError] = useState("");
   const [isNew, setIsNew] = useState(false);
 
@@ -33,7 +32,6 @@ export function RoutesPage() {
 
   function startCreate() {
     setEditing({ ...emptyRoute });
-    setAuthorizedKeysText("");
     setIsNew(true);
     setError("");
   }
@@ -47,7 +45,6 @@ export function RoutesPage() {
       listen_password: "",
       clear_listen_password: false,
     });
-    setAuthorizedKeysText((r.authorized_keys ?? []).join("\n"));
     setIsNew(false);
     setError("");
   }
@@ -56,10 +53,7 @@ export function RoutesPage() {
     if (!editing) return;
     setError("");
     try {
-      await api.upsertRoute({
-        ...editing,
-        authorized_keys: authorizedKeysText.split("\n").map((s) => s.trim()).filter(Boolean),
-      });
+      await api.upsertRoute(editing);
       setEditing(null);
       await load();
     } catch (err) {
@@ -85,6 +79,10 @@ export function RoutesPage() {
         </button>
       </div>
 
+      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+        哪些客户端公钥能登录这个别名,在"客户端密钥"页面管理。
+      </p>
+
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
@@ -93,7 +91,7 @@ export function RoutesPage() {
               <th className="px-4 py-2">目标机器</th>
               <th className="px-4 py-2">目标用户</th>
               <th className="px-4 py-2">认证方式</th>
-              <th className="px-4 py-2">授权公钥数</th>
+              <th className="px-4 py-2">关联的客户端密钥</th>
               <th className="px-4 py-2">密码登录</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -107,7 +105,22 @@ export function RoutesPage() {
                 </td>
                 <td className="px-4 py-2 font-mono">{r.target_user}</td>
                 <td className="px-4 py-2">{r.auth_type === "password" ? "密码" : "私钥"}</td>
-                <td className="px-4 py-2">{(r.authorized_keys ?? []).length}</td>
+                <td className="px-4 py-2">
+                  {(r.client_key_labels ?? []).length === 0 ? (
+                    <span className="text-slate-400">无</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {r.client_key_labels.map((label) => (
+                        <span
+                          key={label}
+                          className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   {r.has_listen_password ? (
                     <span className="text-emerald-600 dark:text-emerald-400">已启用</span>
@@ -216,20 +229,11 @@ export function RoutesPage() {
               </>
             )}
 
-            <Field label="允许连接此别名的客户端公钥 (每行一个,可以配多个)">
-              <textarea
-                className="input h-20 font-mono"
-                value={authorizedKeysText}
-                onChange={(e) => setAuthorizedKeysText(e.target.value)}
-                placeholder="ssh-ed25519 AAAA... claude-client"
-              />
-            </Field>
-
             <Field
               label={
                 editing.has_listen_password
-                  ? "登录密码 (已设置,留空则不修改;和公钥并存,任一种都能登录)"
-                  : "登录密码 (可选,留空则只允许公钥登录;和公钥并存,任一种都能登录)"
+                  ? "登录密码 (已设置,留空则不修改;和关联的客户端公钥并存,任一种都能登录)"
+                  : "登录密码 (可选,留空则只能靠关联的客户端公钥登录)"
               }
             >
               <input

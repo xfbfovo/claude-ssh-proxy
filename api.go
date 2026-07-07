@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ssh"
 )
 
 type API struct {
@@ -39,6 +40,11 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/routes", a.auth(a.handleUpsertRoute))
 	mux.HandleFunc("DELETE /api/routes/{user}", a.auth(a.handleDeleteRoute))
 
+	mux.HandleFunc("GET /api/client-keys", a.auth(a.handleListClientKeys))
+	mux.HandleFunc("POST /api/client-keys", a.auth(a.handleCreateClientKey))
+	mux.HandleFunc("PUT /api/client-keys/{id}", a.auth(a.handleUpdateClientKey))
+	mux.HandleFunc("DELETE /api/client-keys/{id}", a.auth(a.handleDeleteClientKey))
+
 	mux.HandleFunc("GET /api/settings", a.auth(a.handleGetSettings))
 	mux.HandleFunc("PUT /api/settings", a.auth(a.handleUpdateSettings))
 
@@ -49,7 +55,7 @@ func (a *API) Routes() http.Handler {
 
 // ---------- auth middleware ----------
 
-const sessionCookieName = "ssh_proxy_session"
+const sessionCookieName = "claude_ssh_proxy_session"
 
 func (a *API) issueToken(username string) (string, error) {
 	claims := jwt.RegisteredClaims{
@@ -121,7 +127,7 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   12 * 3600,
 	})
-	writeJSON(w, map[string]string{"username": user.Username})
+	writeJSON(w, map[string]any{"username": user.Username, "initialized": user.Initialized})
 }
 
 func (a *API) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +136,13 @@ func (a *API) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]string{"username": usernameFromContext(r.Context())})
+	username := usernameFromContext(r.Context())
+	user, err := a.store.GetAdminUser(username)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "用户不存在")
+		return
+	}
+	writeJSON(w, map[string]any{"username": user.Username, "initialized": user.Initialized})
 }
 
 func (a *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +226,74 @@ func (a *API) handleUpsertRoute(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleDeleteRoute(w http.ResponseWriter, r *http.Request) {
 	user := r.PathValue("user")
 	if err := a.store.DeleteRoute(user); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (a *API) handleListClientKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := a.store.ListClientKeys()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, keys)
+}
+
+func (a *API) handleCreateClientKey(w http.ResponseWriter, r *http.Request) {
+	var body ClientKey
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Label == "" || body.PublicKey == "" {
+		writeError(w, http.StatusBadRequest, "label / public_key 不能为空")
+		return
+	}
+	if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(body.PublicKey)); err != nil {
+		writeError(w, http.StatusBadRequest, "公钥格式不合法: "+err.Error())
+		return
+	}
+	id, err := a.store.CreateClientKey(body.Label, body.PublicKey, body.RouteUsers)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "id": id})
+}
+
+func (a *API) handleUpdateClientKey(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "非法的 id")
+		return
+	}
+	var body ClientKey
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if body.Label == "" || body.PublicKey == "" {
+		writeError(w, http.StatusBadRequest, "label / public_key 不能为空")
+		return
+	}
+	if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(body.PublicKey)); err != nil {
+		writeError(w, http.StatusBadRequest, "公钥格式不合法: "+err.Error())
+		return
+	}
+	if err := a.store.UpdateClientKey(id, body.Label, body.PublicKey, body.RouteUsers); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (a *API) handleDeleteClientKey(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "非法的 id")
+		return
+	}
+	if err := a.store.DeleteClientKey(id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
