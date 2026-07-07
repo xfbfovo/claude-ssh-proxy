@@ -40,7 +40,7 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">claude-ssh-proxy 管理后台</h1>
           <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
             <span>{me.username}</span>
@@ -49,7 +49,7 @@ function App() {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-5xl gap-1 px-6">
+        <nav className="mx-auto flex max-w-7xl gap-1 px-6">
           {(
             [
               ["routes", "服务器"],
@@ -73,7 +73,7 @@ function App() {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-6 py-8">
         {tab === "routes" && <RoutesPage />}
         {tab === "client-keys" && <ClientKeysPage />}
         {tab === "settings" && <SettingsPage />}

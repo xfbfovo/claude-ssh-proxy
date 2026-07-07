@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type RouteRecord } from "./api";
+import { ChipList } from "./ChipList";
+import { Tooltip } from "./Tooltip";
 
 const emptyRoute: RouteRecord = {
   route_user: "",
@@ -154,20 +156,7 @@ export function RoutesPage() {
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  {(r.client_key_labels ?? []).length === 0 ? (
-                    <span className="text-slate-400">无</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {r.client_key_labels.map((label) => (
-                        <span
-                          key={label}
-                          className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <ChipList items={r.client_key_labels ?? []} emptyText="无" />
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button
@@ -354,8 +343,10 @@ function TestStatus({ route }: { route: RouteRecord }) {
   }
 
   return (
-    <div className="text-xs" title={route.last_test_error || "未知错误"}>
-      <span className="cursor-help text-red-600 underline decoration-dotted dark:text-red-400">失败</span>
+    <div className="text-xs">
+      <Tooltip text={route.last_test_error || "未知错误"}>
+        <span className="cursor-help text-red-600 underline decoration-dotted dark:text-red-400">失败</span>
+      </Tooltip>
       <div className="text-slate-400">{time}</div>
     </div>
   );

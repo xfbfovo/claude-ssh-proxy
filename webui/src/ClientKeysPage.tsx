@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type ClientKey, type RouteRecord } from "./api";
+import { ChipList } from "./ChipList";
 
 const emptyKey: Omit<ClientKey, "id"> = {
   label: "",
@@ -122,17 +123,7 @@ export function ClientKeysPage() {
                   {k.public_key}
                 </td>
                 <td className="px-4 py-2">
-                  {k.route_users.length === 0 ? (
-                    <span className="text-slate-400">未关联任何服务器</span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {k.route_users.map((ru) => (
-                        <span key={ru} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">
-                          {ru}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <ChipList items={k.route_users} emptyText="未关联任何服务器" />
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => startEdit(k)} className="mr-3 text-indigo-600 hover:underline dark:text-indigo-400">
