@@ -90,7 +90,7 @@ export function RoutesPage() {
   }
 
   async function remove(routeUser: string) {
-    if (!confirm(`确定删除路由 ${routeUser} 吗?`)) return;
+    if (!confirm(`确定删除服务器 ${routeUser} 吗?`)) return;
     await api.deleteRoute(routeUser);
     await load();
   }
@@ -98,7 +98,7 @@ export function RoutesPage() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">后端服务器路由</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">后端服务器</h2>
         <div className="flex gap-2">
           <button
             onClick={testAll}
@@ -117,7 +117,7 @@ export function RoutesPage() {
       </div>
 
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        哪些客户端公钥能登录这个别名,在"客户端密钥"页面管理。
+        哪些客户端公钥能登录这台服务器,在"客户端密钥"页面管理。
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
@@ -189,7 +189,7 @@ export function RoutesPage() {
             {routes.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-6 text-center text-slate-400">
-                  还没有配置任何路由
+                  还没有配置任何服务器
                 </td>
               </tr>
             )}

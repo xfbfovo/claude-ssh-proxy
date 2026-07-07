@@ -83,7 +83,7 @@ export function ClientKeysPage() {
   }
 
   async function remove(id: number, label: string) {
-    if (!confirm(`确定删除客户端密钥 "${label}" 吗?删除后所有关联它的路由都会失去这把 key 的登录权限。`)) return;
+    if (!confirm(`确定删除客户端密钥 "${label}" 吗?删除后所有关联它的服务器都会失去这把 key 的登录权限。`)) return;
     await api.deleteClientKey(id);
     await load();
   }
@@ -101,7 +101,7 @@ export function ClientKeysPage() {
       </div>
 
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        每把密钥代表一个客户端身份(比如某个 Claude Agent),可以关联多个后端服务器路由——关联了哪些,这把 key 就能登录哪些。
+        每把密钥代表一个客户端身份(比如某个 Claude Agent),可以关联多个后端服务器——关联了哪些,这把 key 就能登录哪些。
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
@@ -110,7 +110,7 @@ export function ClientKeysPage() {
             <tr>
               <th className="px-4 py-2">名称</th>
               <th className="px-4 py-2">公钥指纹</th>
-              <th className="px-4 py-2">关联的路由别名</th>
+              <th className="px-4 py-2">关联的服务器</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -123,7 +123,7 @@ export function ClientKeysPage() {
                 </td>
                 <td className="px-4 py-2">
                   {k.route_users.length === 0 ? (
-                    <span className="text-slate-400">未关联任何路由</span>
+                    <span className="text-slate-400">未关联任何服务器</span>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {k.route_users.map((ru) => (
@@ -186,11 +186,11 @@ export function ClientKeysPage() {
 
             <div className="mb-3">
               <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
-                这把 key 能登录哪些路由别名
+                这把 key 能登录哪些服务器
               </label>
               <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-300 p-2 dark:border-slate-700">
                 {routes.length === 0 && (
-                  <p className="text-sm text-slate-400">还没有配置任何路由,先去"服务器路由"页面添加</p>
+                  <p className="text-sm text-slate-400">还没有配置任何服务器,先去"服务器"页面添加</p>
                 )}
                 {routes.map((r) => (
                   <label key={r.route_user} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">

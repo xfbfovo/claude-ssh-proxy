@@ -52,7 +52,7 @@ function App() {
         <nav className="mx-auto flex max-w-5xl gap-1 px-6">
           {(
             [
-              ["routes", "服务器路由"],
+              ["routes", "服务器"],
               ["client-keys", "客户端密钥"],
               ["settings", "监听设置"],
               ["audit", "审计日志"],
