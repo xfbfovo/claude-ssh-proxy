@@ -1,0 +1,218 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"sync"
+
+	"golang.org/x/crypto/ssh"
+)
+
+type Proxy struct {
+	store      *Store
+	hostSigner ssh.Signer
+
+	mu       sync.Mutex
+	listener net.Listener
+	stopped  bool
+}
+
+func NewProxy(store *Store, hostKeyPath string) (*Proxy, error) {
+	signer, err := loadOrCreateHostKey(hostKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	return &Proxy{store: store, hostSigner: signer}, nil
+}
+
+// Start 在指定地址上监听并开始接受连接(非阻塞,内部起 goroutine 处理 accept 循环)。
+func (p *Proxy) Start(addr string) error {
+	serverCfg := &ssh.ServerConfig{
+		PublicKeyCallback: buildPublicKeyCallback(p.store),
+		PasswordCallback:  buildPasswordCallback(p.store),
+	}
+	serverCfg.AddHostKey(p.hostSigner)
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("监听 %s 失败: %w", addr, err)
+	}
+
+	p.mu.Lock()
+	p.listener = ln
+	p.stopped = false
+	p.mu.Unlock()
+
+	log.Printf("ssh-proxy 正在监听 %s", addr)
+
+	go func() {
+		for {
+			nc, err := ln.Accept()
+			if err != nil {
+				p.mu.Lock()
+				stopped := p.stopped
+				p.mu.Unlock()
+				if stopped {
+					return
+				}
+				log.Printf("accept 失败: %v", err)
+				return
+			}
+			go p.handleConn(nc, serverCfg)
+		}
+	}()
+
+	return nil
+}
+
+// Stop 关闭当前监听,供切换监听地址时调用。
+func (p *Proxy) Stop() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.listener != nil {
+		p.stopped = true
+		p.listener.Close()
+		p.listener = nil
+	}
+}
+
+// Restart 停掉旧监听,换到新地址重新监听。
+func (p *Proxy) Restart(addr string) error {
+	p.Stop()
+	return p.Start(addr)
+}
+
+func (p *Proxy) handleConn(nc net.Conn, serverCfg *ssh.ServerConfig) {
+	defer nc.Close()
+	remoteAddr := nc.RemoteAddr().String()
+
+	sconn, chans, reqs, err := ssh.NewServerConn(nc, serverCfg)
+	if err != nil {
+		log.Printf("[%s] 握手/认证失败: %v", remoteAddr, err)
+		return
+	}
+	defer sconn.Close()
+
+	routeName := sconn.Permissions.Extensions["route-user"]
+	route, err := p.store.GetRoute(routeName)
+	if err != nil {
+		log.Printf("[%s] 路由 %q 不存在", remoteAddr, routeName)
+		return
+	}
+
+	log.Printf("[%s] 用户 %q 认证通过,路由到 %s@%s:%d",
+		remoteAddr, routeName, route.TargetUser, route.TargetHost, route.TargetPort)
+
+	client, err := dialUpstream(*route)
+	if err != nil {
+		log.Printf("[%s] 连接后端 %s:%d 失败: %v", remoteAddr, route.TargetHost, route.TargetPort, err)
+		return
+	}
+	defer client.Close()
+
+	go ssh.DiscardRequests(reqs) // 全局请求(如 keepalive)直接丢弃,不影响会话代理
+
+	var wg sync.WaitGroup
+	for newChan := range chans {
+		wg.Add(1)
+		go func(nch ssh.NewChannel) {
+			defer wg.Done()
+			p.forwardChannel(nch, client, routeName, remoteAddr, route.TargetHost, route.TargetPort)
+		}(newChan)
+	}
+	wg.Wait()
+}
+
+func dialUpstream(route RouteRecord) (*ssh.Client, error) {
+	var authMethods []ssh.AuthMethod
+	switch route.AuthType {
+	case "password":
+		authMethods = append(authMethods, ssh.Password(route.AuthPassword))
+	case "private_key":
+		signer, err := parsePrivateKey(route.AuthPrivateKey, route.AuthPrivateKeyPassphrase)
+		if err != nil {
+			return nil, fmt.Errorf("解析私钥失败: %w", err)
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
+	default:
+		return nil, fmt.Errorf("未知认证方式 %q", route.AuthType)
+	}
+
+	clientCfg := &ssh.ClientConfig{
+		User:            route.TargetUser,
+		Auth:            authMethods,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 内网环境使用;需要更严格校验时换成 ssh.FixedHostKey
+	}
+
+	addr := fmt.Sprintf("%s:%d", route.TargetHost, route.TargetPort)
+	return ssh.Dial("tcp", addr, clientCfg)
+}
+
+// forwardChannel 把下游(Claude 侧)发起的一个 channel 对应地在上游(真实目标机器)
+// 打开一个同类型 channel,双向转发数据和 out-of-band 请求;对 "session" 类型的
+// channel(exec/shell/subsystem)顺带记录审计日志。
+func (p *Proxy) forwardChannel(newChan ssh.NewChannel, client *ssh.Client, routeUser, remoteAddr, targetHost string, targetPort int) {
+	upChan, upReqs, err := client.OpenChannel(newChan.ChannelType(), newChan.ExtraData())
+	if err != nil {
+		if openErr, ok := err.(*ssh.OpenChannelError); ok {
+			newChan.Reject(openErr.Reason, openErr.Message)
+		} else {
+			newChan.Reject(ssh.ConnectionFailed, err.Error())
+		}
+		return
+	}
+	defer upChan.Close()
+
+	downChan, downReqs, err := newChan.Accept()
+	if err != nil {
+		return
+	}
+	defer downChan.Close()
+
+	var audit *auditSession
+	if newChan.ChannelType() == "session" {
+		audit = newAuditSession(p.store, routeUser, remoteAddr, targetHost, targetPort)
+		defer audit.finish()
+	}
+
+	go forwardRequests(downReqs, upChan, audit)
+	go forwardRequests(upReqs, downChan, audit)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		var reader io.Reader = downChan
+		if audit != nil {
+			reader = io.TeeReader(downChan, audit) // 捕获 client->server 方向的数据(shell 里敲的命令)
+		}
+		io.Copy(upChan, reader)
+		upChan.CloseWrite()
+	}()
+	go func() {
+		defer wg.Done()
+		io.Copy(downChan, upChan)
+		downChan.CloseWrite()
+	}()
+	wg.Wait()
+}
+
+// forwardRequests 把一侧收到的 out-of-band 请求(pty-req/shell/exec/env/window-change/exit-status 等)
+// 原样转发给另一侧,并把 reply 结果传回去;顺带喂给 audit 做审计记录。
+func forwardRequests(in <-chan *ssh.Request, out ssh.Channel, audit *auditSession) {
+	for req := range in {
+		if audit != nil {
+			audit.noteRequest(req)
+		}
+		ok, err := out.SendRequest(req.Type, req.WantReply, req.Payload)
+		if req.WantReply {
+			if err != nil {
+				req.Reply(false, nil)
+			} else {
+				req.Reply(ok, nil)
+			}
+		}
+	}
+}

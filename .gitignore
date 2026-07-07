@@ -1,0 +1,8 @@
+/ssh-proxy
+*.db
+*.db-wal
+*.db-shm
+*.log
+host_key
+webui/node_modules/
+webui/dist/
