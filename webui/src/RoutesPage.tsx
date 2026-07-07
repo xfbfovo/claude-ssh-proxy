@@ -127,10 +127,10 @@ export function RoutesPage() {
               <th className="px-4 py-2">登录别名</th>
               <th className="px-4 py-2">目标机器</th>
               <th className="px-4 py-2">目标用户</th>
-              <th className="px-4 py-2">认证方式</th>
-              <th className="px-4 py-2">关联的客户端密钥</th>
-              <th className="px-4 py-2">密码登录</th>
               <th className="px-4 py-2">连接测试</th>
+              <th className="px-4 py-2">认证方式</th>
+              <th className="px-4 py-2">密码登录</th>
+              <th className="px-4 py-2">关联的客户端密钥</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -142,7 +142,17 @@ export function RoutesPage() {
                   {r.target_host}:{r.target_port}
                 </td>
                 <td className="px-4 py-2 font-mono">{r.target_user}</td>
+                <td className="px-4 py-2">
+                  <TestStatus route={r} />
+                </td>
                 <td className="px-4 py-2">{r.auth_type === "password" ? "密码" : "私钥"}</td>
+                <td className="px-4 py-2">
+                  {r.has_listen_password ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">已启用</span>
+                  ) : (
+                    <span className="text-slate-400">未启用</span>
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   {(r.client_key_labels ?? []).length === 0 ? (
                     <span className="text-slate-400">无</span>
@@ -158,16 +168,6 @@ export function RoutesPage() {
                       ))}
                     </div>
                   )}
-                </td>
-                <td className="px-4 py-2">
-                  {r.has_listen_password ? (
-                    <span className="text-emerald-600 dark:text-emerald-400">已启用</span>
-                  ) : (
-                    <span className="text-slate-400">未启用</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <TestStatus route={r} />
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button
